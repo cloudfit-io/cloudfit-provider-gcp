@@ -78,6 +78,34 @@ print(f"total: {len(all_instances)} machine types across {len(regions)} regions"
 
 ---
 
+## Examples
+
+Runnable scripts are in [`examples/`](examples/):
+
+| Script | Needs GCP credentials? | What it shows |
+|---|---|---|
+| [`recommend.py`](examples/recommend.py) | yes (ADC) | live `GCPProvider.fetch_instances()` → `cloudfit.rank()` |
+| [`recommend_offline.py`](examples/recommend_offline.py) | no | recorded fixture → `normalize_machine_type()` → `cloudfit.rank()` |
+
+Try the offline one first — it runs anywhere, no GCP account required:
+
+```bash
+python examples/recommend_offline.py
+```
+
+```text
+Ranking for 32 vCPU / 120 GB (optimize_for=balanced):
+
+  ok  c3d-standard-60-lssd      score=0.96  $  2.87/hr  [active]
+  ok  c2-standard-60            score=0.95  $  2.82/hr  [active]
+  ok  n2-standard-32            score=0.82  $  1.53/hr  [active]
+  --  a2-highgpu-1g             $  0.73/hr  [active]  ✗ RAM 85.0 GB < required 120.0 GB
+  --  n1-standard-8             $  0.37/hr  [deprecated]  ✗ RAM 30.0 GB < required 120.0 GB
+  --  f1-micro                  $  0.03/hr  [tombstoned]  ✗ RAM 0.6 GB < required 120.0 GB
+```
+
+---
+
 ## Pricing
 
 Pricing is fetched from the [GCP Cloud Billing Catalog API](https://cloud.google.com/billing/docs/reference/rest). Prices are on-demand (no committed-use or spot discount), reconstructed per instance from each family's vCPU and RAM SKU rates. If a family's SKUs can't be matched, `price_hr` falls back to `0.0` and the instance is still scored (its `cost_score` is just 0).
@@ -128,6 +156,10 @@ cloudfit-provider-gcp/
 │   ├── pricing.py           # Cloud Billing Catalog API → price_hr
 │   ├── regions.py           # GCP region list + helpers
 │   └── registry.py          # write normalized instances to PostgreSQL
+│
+├── examples/
+│   ├── recommend.py         # live fetch → rank (needs GCP credentials)
+│   └── recommend_offline.py # fixture → rank (no credentials needed)
 │
 └── tests/
     ├── test_normalizer.py   # unit tests — no API calls needed
