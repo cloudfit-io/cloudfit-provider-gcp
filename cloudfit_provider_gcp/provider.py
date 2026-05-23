@@ -60,10 +60,9 @@ class GCPProvider(Provider):
         raw_list = self._list_machine_types(client, zone)
 
         # Fetch pricing once for the whole region
-        price_map: dict[str, float] = {}
         if self._pricing_client:
             try:
-                core_prices, ram_prices = self._pricing_client.get_price_map(region)  # type: ignore
+                core_prices, ram_prices = self._pricing_client.get_price_map(region)
             except Exception as exc:
                 logger.warning("Pricing fetch failed for %s: %s", region, exc)
                 core_prices, ram_prices = {}, {}
@@ -126,7 +125,7 @@ class GCPProvider(Provider):
         if not self._pricing_client:
             return 0.0
         try:
-            core_prices, ram_prices = self._pricing_client.get_price_map(region)  # type: ignore
+            core_prices, ram_prices = self._pricing_client.get_price_map(region)
             # We need vcpu + ram to reconstruct — fetch from compute API
             raw = self._get_machine_type_raw(instance_id, region)
             if not raw:

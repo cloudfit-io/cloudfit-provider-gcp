@@ -74,10 +74,16 @@ class PricingClient:
     """
 
     def __init__(self) -> None:
-        self._cache: dict[str, dict[str, float]] = {}
+        self._cache: dict[str, tuple[dict[str, float], dict[str, float]]] = {}
 
-    def get_price_map(self, region: str) -> dict[str, float]:
-        """Return a dict mapping machine_type_id → on-demand price/hr.
+    def get_price_map(
+        self, region: str
+    ) -> tuple[dict[str, float], dict[str, float]]:
+        """Return component price maps for a region: ``(core_prices, ram_prices)``.
+
+        Each map is keyed by machine family (e.g. ``"n2"``) → unit price/hr —
+        ``core_prices`` is $/vCPU/hr and ``ram_prices`` is $/GB/hr. Callers
+        reconstruct a per-instance price with :func:`reconstruct_price`.
 
         Results are cached per region for the lifetime of the client instance.
         For production use, instantiate one PricingClient per cron run.
@@ -86,26 +92,28 @@ class PricingClient:
             region: GCP region (e.g. "us-central1")
 
         Returns:
-            dict mapping instance ID (e.g. "n2-standard-32") to price_hr (float).
-            Returns empty dict if the Billing API is unavailable.
+            ``(core_prices, ram_prices)``. Both maps are empty if the Billing
+            API is unavailable — instances then fall back to ``price_hr=0.0``.
         """
         if region in self._cache:
             return self._cache[region]
 
         try:
-            price_map = self._fetch_price_map(region)
+            price_maps = self._fetch_price_map(region)
         except Exception as exc:
             logger.warning(
                 "Failed to fetch pricing for region %s: %s. "
                 "Instances will have price_hr=0.0.",
                 region, exc,
             )
-            price_map = {}
+            price_maps = ({}, {})
 
-        self._cache[region] = price_map
-        return price_map
+        self._cache[region] = price_maps
+        return price_maps
 
-    def _fetch_price_map(self, region: str) -> dict[str, float]:
+    def _fetch_price_map(
+        self, region: str
+    ) -> tuple[dict[str, float], dict[str, float]]:
         """Internal: fetch and parse SKUs from the Billing Catalog API."""
         try:
             from google.cloud import billing_v1
@@ -129,8 +137,8 @@ class PricingClient:
                 continue
             self._parse_sku(sku, core_prices, ram_prices)
 
-        return core_prices, ram_prices  # type: ignore[return-value]
-        # Note: the caller reconstructs per-instance price from family + size
+        # Caller reconstructs per-instance price from family + size.
+        return core_prices, ram_prices
 
     @staticmethod
     def _nano_to_usd(pricing_info: Any) -> float:

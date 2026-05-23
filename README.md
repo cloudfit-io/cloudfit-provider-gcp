@@ -1,7 +1,7 @@
 # cloudfit-provider-gcp
 
 [![PyPI version](https://img.shields.io/pypi/v/cloudfit-provider-gcp)](https://pypi.org/project/cloudfit-provider-gcp/)
-[![Tests](https://github.com/cloudfit-io/cloudfit-provider-gcp/actions/workflows/test.yml/badge.svg)](https://github.com/cloudfit-io/cloudfit-provider-gcp/actions)
+[![Tests](https://github.com/cloudfit-io/cloudfit-provider-gcp/actions/workflows/ci.yml/badge.svg)](https://github.com/cloudfit-io/cloudfit-provider-gcp/actions)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](LICENSE)
 
 **GCP Compute Engine provider plugin for [cloudfit-core](https://github.com/cloudfit-io/cloudfit-core).**
@@ -80,7 +80,7 @@ print(f"total: {len(all_instances)} machine types across {len(regions)} regions"
 
 ## Pricing
 
-Pricing is fetched from the [GCP Cloud Billing Catalog API](https://cloud.google.com/billing/docs/reference/rest). Prices are on-demand (no committed use discount). The provider also fetches spot/preemptible pricing where available.
+Pricing is fetched from the [GCP Cloud Billing Catalog API](https://cloud.google.com/billing/docs/reference/rest). Prices are on-demand (no committed-use or spot discount), reconstructed per instance from each family's vCPU and RAM SKU rates. If a family's SKUs can't be matched, `price_hr` falls back to `0.0` and the instance is still scored (its `cost_score` is just 0).
 
 ```python
 price_hr = provider.get_pricing("n2-standard-32", region="us-central1")
@@ -91,7 +91,7 @@ price_hr = provider.get_pricing("n2-standard-32", region="us-central1")
 
 ## Cron / scheduled refresh
 
-For production use, run the fetcher on a daily schedule and write results to the cloudfit registry store (PostgreSQL). A Cloud Scheduler + Cloud Run Job setup is documented in [docs/cron.md](docs/cron.md).
+For production use, run the fetcher on a daily schedule and write results to the cloudfit registry store (PostgreSQL). The recommended pattern is a Cloud Scheduler trigger invoking a Cloud Run Job.
 
 ```python
 from cloudfit_provider_gcp import GCPProvider
@@ -115,9 +115,9 @@ When GCP marks a machine type as deprecated, the provider sets `status="deprecat
 ```
 cloudfit-provider-gcp/
 ├── README.md
+├── CONTRIBUTING.md
 ├── CITATION.cff
 ├── pyproject.toml
-├── CONTRIBUTING.md
 ├── LICENSE
 ├── .gitignore
 │
