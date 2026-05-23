@@ -3,6 +3,21 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.DS_Store
+*.env
+service-account*.json
+
 # C extensions
 *.so
 

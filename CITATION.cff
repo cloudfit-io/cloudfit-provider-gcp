@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+message: "If you use cloudfit-provider-gcp in your research, please cite it."
+type: software
+title: "cloudfit-provider-gcp: GCP Compute Engine provider plugin for cloudfit-core"
+abstract: >
+  cloudfit-provider-gcp fetches machine types, pricing, and availability
+  from the GCP Compute Engine and Cloud Billing APIs and normalizes them
+  into MachineType objects compatible with cloudfit-core's scoring engine.
+  Supports deprecation tombstoning so existing infrastructure-as-code
+  configurations warn rather than silently break when GCP retires instance families.
+authors:
+  - family-names: Kasaraneni
+    given-names: Chaitanya Krishna
+    orcid: https://orcid.org/0000-0001-5792-1095
+    email: kc.kasaraneni@gmail.com
+version: 0.1.0
+date-released: "2026-05-22"
+license: Apache-2.0
+repository-code: https://github.com/cloudfit-io/cloudfit-provider-gcp
+keywords:
+  - cloud computing
+  - GCP
+  - Google Cloud
+  - machine type
+  - bioinformatics
+  - cloudfit
+  - instance recommendation
+references:
+  - type: software
+    title: cloudfit-core
+    authors:
+      - family-names: Kasaraneni
+        given-names: Chaitanya Krishna
+        orcid: https://orcid.org/0000-0001-5792-1095
+    repository-code: https://github.com/cloudfit-io/cloudfit-core

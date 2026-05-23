@@ -1,0 +1,60 @@
+[
+  {
+    "name": "n2-standard-32",
+    "guestCpus": 32,
+    "memoryMb": 131072,
+    "scratchDisks": [],
+    "accelerators": [],
+    "deprecated": null
+  },
+  {
+    "name": "c2-standard-60",
+    "guestCpus": 60,
+    "memoryMb": 234496,
+    "scratchDisks": [],
+    "accelerators": [],
+    "deprecated": null
+  },
+  {
+    "name": "c3d-standard-60-lssd",
+    "guestCpus": 60,
+    "memoryMb": 245760,
+    "scratchDisks": [{"diskSizeGb": "375"}, {"diskSizeGb": "375"}, {"diskSizeGb": "375"}, {"diskSizeGb": "375"}],
+    "accelerators": [],
+    "deprecated": null
+  },
+  {
+    "name": "a2-highgpu-1g",
+    "guestCpus": 12,
+    "memoryMb": 87040,
+    "scratchDisks": [],
+    "accelerators": [
+      {
+        "guestAcceleratorCount": 1,
+        "guestAcceleratorType": "nvidia-tesla-a100"
+      }
+    ],
+    "deprecated": null
+  },
+  {
+    "name": "n1-standard-8",
+    "guestCpus": 8,
+    "memoryMb": 30720,
+    "scratchDisks": [],
+    "accelerators": [],
+    "deprecated": {
+      "state": "DEPRECATED",
+      "replacement": "https://www.googleapis.com/compute/v1/projects/PROJECT/zones/ZONE/machineTypes/n2-standard-8"
+    }
+  },
+  {
+    "name": "f1-micro",
+    "guestCpus": 1,
+    "memoryMb": 614,
+    "scratchDisks": [],
+    "accelerators": [],
+    "deprecated": {
+      "state": "OBSOLETE"
+    }
+  }
+]
