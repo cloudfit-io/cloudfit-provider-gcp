@@ -173,7 +173,9 @@ cloudfit-provider-gcp/
 ## Related projects
 
 - [`cloudfit-core`](https://github.com/cloudfit-io/cloudfit-core) — scoring engine
-- [`cloudfit-provider-aws`](https://github.com/cloudfit-io/cloudfit-provider-aws) — AWS provider (coming soon)
+- [`cloudfit-provider-aws`](https://github.com/cloudfit-io/cloudfit-provider-aws) — AWS provider (planning phase)
+- [`cloudfit-api`](https://github.com/cloudfit-io/cloudfit-api) — REST API over the scoring engine ([live demo](https://chaitanyakasaraneni-cloudfit-api.hf.space/docs))
+- [`cloudfit-ui`](https://github.com/cloudfit-io/cloudfit-ui) — Gradio UI over the scoring engine ([live demo](https://chaitanyakasaraneni-cloudfit-ui.hf.space))
 - [`samplesheet-parser`](https://github.com/chaitanyakasaraneni/samplesheet-parser) — Illumina SampleSheet parser
 
 ## License
