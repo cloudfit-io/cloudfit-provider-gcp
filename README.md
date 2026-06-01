@@ -28,7 +28,7 @@ Uses [Application Default Credentials](https://cloud.google.com/docs/authenticat
 gcloud auth application-default login
 ```
 
-Or set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to a service account key path. In production (Cloud Run, GKE), credentials are picked up automatically from the instance metadata server — no configuration needed.
+Or set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to a service account key path. In production (Cloud Run, GKE), credentials are picked up automatically from the instance metadata server: no configuration needed.
 
 ---
 
@@ -38,7 +38,7 @@ Or set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to a service ac
 from cloudfit_provider_gcp import GCPProvider
 from cloudfit import rank, WorkloadProfile
 
-# initialize — no credentials needed if ADC is configured
+# initialize: no credentials needed if ADC is configured
 provider = GCPProvider(project_id="your-gcp-project")
 
 # fetch all machine types for a region
@@ -87,7 +87,7 @@ Runnable scripts are in [`examples/`](examples/):
 | [`recommend.py`](examples/recommend.py) | yes (ADC) | live `GCPProvider.fetch_instances()` → `cloudfit.rank()` |
 | [`recommend_offline.py`](examples/recommend_offline.py) | no | recorded fixture → `normalize_machine_type()` → `cloudfit.rank()` |
 
-Try the offline one first — it runs anywhere, no GCP account required:
+Try the offline one first: it runs anywhere, no GCP account required:
 
 ```bash
 python examples/recommend_offline.py
@@ -134,7 +134,7 @@ write_to_registry(instances, database_url=os.environ["DATABASE_URL"])
 
 ## Deprecation handling
 
-When GCP marks a machine type as deprecated, the provider sets `status="deprecated"` on the `MachineType`. When a type is fully removed, it becomes `status="tombstoned"` — it is never deleted from the registry, so existing configs can warn instead of silently breaking.
+When GCP marks a machine type as deprecated, the provider sets `status="deprecated"` on the `MachineType`. When a type is fully removed, it becomes `status="tombstoned"`: it is never deleted from the registry, so existing configs can warn instead of silently breaking.
 
 ---
 
@@ -151,7 +151,7 @@ cloudfit-provider-gcp/
 │
 ├── cloudfit_provider_gcp/
 │   ├── __init__.py          # exports GCPProvider
-│   ├── provider.py          # GCPProvider — implements Provider base class
+│   ├── provider.py          # GCPProvider: implements Provider base class
 │   ├── normalizer.py        # raw GCP API response → MachineType
 │   ├── pricing.py           # Cloud Billing Catalog API → price_hr
 │   ├── regions.py           # GCP region list + helpers
@@ -162,7 +162,7 @@ cloudfit-provider-gcp/
 │   └── recommend_offline.py # fixture → rank (no credentials needed)
 │
 └── tests/
-    ├── test_normalizer.py   # unit tests — no API calls needed
+    ├── test_normalizer.py   # unit tests: no API calls needed
     ├── test_regions.py
     └── fixtures/
         └── machine_type_response.json   # recorded GCP API response
@@ -172,15 +172,15 @@ cloudfit-provider-gcp/
 
 ## Related projects
 
-- [`cloudfit-core`](https://github.com/cloudfit-io/cloudfit-core) — scoring engine
-- [`cloudfit-provider-aws`](https://github.com/cloudfit-io/cloudfit-provider-aws) — AWS provider (planning phase)
-- [`cloudfit-api`](https://github.com/cloudfit-io/cloudfit-api) — REST API over the scoring engine ([live demo](https://chaitanyakasaraneni-cloudfit-api.hf.space/docs))
-- [`cloudfit-ui`](https://github.com/cloudfit-io/cloudfit-ui) — Gradio UI over the scoring engine ([live demo](https://chaitanyakasaraneni-cloudfit-ui.hf.space))
-- [`samplesheet-parser`](https://github.com/chaitanyakasaraneni/samplesheet-parser) — Illumina SampleSheet parser
+- [`cloudfit-core`](https://github.com/cloudfit-io/cloudfit-core): scoring engine
+- [`cloudfit-provider-aws`](https://github.com/cloudfit-io/cloudfit-provider-aws): AWS provider (planning phase)
+- [`cloudfit-api`](https://github.com/cloudfit-io/cloudfit-api): REST API over the scoring engine ([live demo](https://chaitanyakasaraneni-cloudfit-api.hf.space/docs))
+- [`cloudfit-ui`](https://github.com/cloudfit-io/cloudfit-ui): Gradio UI over the scoring engine ([live demo](https://chaitanyakasaraneni-cloudfit-ui.hf.space))
+- [`samplesheet-parser`](https://github.com/chaitanyakasaraneni/samplesheet-parser): Illumina SampleSheet parser
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE).
+Apache 2.0: see [LICENSE](LICENSE).
 
 ---
 

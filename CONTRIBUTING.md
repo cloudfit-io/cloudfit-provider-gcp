@@ -1,14 +1,14 @@
 # Contributing to cloudfit-provider-gcp
 
-Thank you for your interest in contributing. This package is the GCP provider plugin for [cloudfit-core](https://github.com/cloudfit-io/cloudfit-core) — it fetches GCP Compute Engine machine types, pricing, and availability and normalizes them into `cloudfit.models.MachineType` objects.
+Thank you for your interest in contributing. This package is the GCP provider plugin for [cloudfit-core](https://github.com/cloudfit-io/cloudfit-core): it fetches GCP Compute Engine machine types, pricing, and availability and normalizes them into `cloudfit.models.MachineType` objects.
 
 ## Ways to contribute
 
-- **Bug reports** — open an issue with a minimal reproducible example
-- **New regions** — add a region to the registry (see [Extending the data maps](#extending-the-data-maps))
-- **Pricing accuracy** — improve SKU matching in `pricing.py`
-- **GPU / generation coverage** — keep the VRAM and generation maps current as GCP releases new families
-- **Documentation** — examples, corrections, tutorials
+- **Bug reports**: open an issue with a minimal reproducible example
+- **New regions**: add a region to the registry (see [Extending the data maps](#extending-the-data-maps))
+- **Pricing accuracy**: improve SKU matching in `pricing.py`
+- **GPU / generation coverage**: keep the VRAM and generation maps current as GCP releases new families
+- **Documentation**: examples, corrections, tutorials
 
 ## Development setup
 
@@ -33,7 +33,7 @@ pytest tests/ -v
 ruff check cloudfit_provider_gcp/
 ```
 
-**No GCP credentials are needed to run the test suite** — `normalizer.py` and `regions.py` are pure functions tested against `tests/fixtures/machine_type_response.json`. Only live fetches (`provider.fetch_instances`) require Application Default Credentials.
+**No GCP credentials are needed to run the test suite**: `normalizer.py` and `regions.py` are pure functions tested against `tests/fixtures/machine_type_response.json`. Only live fetches (`provider.fetch_instances`) require Application Default Credentials.
 
 ## Extending the data maps
 
@@ -49,7 +49,7 @@ When you change normalization, add a representative entry to `tests/fixtures/mac
 
 ## Pull request guidelines
 
-- Keep PRs focused — one feature or fix per PR
+- Keep PRs focused: one feature or fix per PR
 - Add or update tests for any normalization or pricing change
 - Run `pytest` and `ruff check cloudfit_provider_gcp/` before submitting
 - Bump the version in `pyproject.toml` and `CITATION.cff` when releasing
