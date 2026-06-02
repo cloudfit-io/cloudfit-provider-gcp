@@ -2,7 +2,7 @@
 
 from .provider import GCPProvider
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __author__  = "Chaitanya Krishna Kasaraneni"
 __license__ = "Apache-2.0"
 
