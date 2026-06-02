@@ -96,12 +96,12 @@ python examples/recommend_offline.py
 ```text
 Ranking for 32 vCPU / 120 GB (optimize_for=balanced):
 
-  ok  c3d-standard-60-lssd      score=0.96  $  2.87/hr  [active]
-  ok  c2-standard-60            score=0.95  $  2.82/hr  [active]
-  ok  n2-standard-32            score=0.82  $  1.53/hr  [active]
-  --  a2-highgpu-1g             $  0.73/hr  [active]  ✗ RAM 85.0 GB < required 120.0 GB
-  --  n1-standard-8             $  0.37/hr  [deprecated]  ✗ RAM 30.0 GB < required 120.0 GB
-  --  f1-micro                  $  0.03/hr  [tombstoned]  ✗ RAM 0.6 GB < required 120.0 GB
+  ok  n2-standard-32            score=1.00  $  1.53/hr  [active]
+  ok  c2-standard-60            score=0.61  $  2.82/hr  [active]
+  ok  c3d-standard-60-lssd      score=0.60  $  2.87/hr  [active]
+  --  a2-highgpu-1g             $  0.73/hr  [active]  ✗ RAM 85 GB < required 120 GB
+  --  n1-standard-8             $  0.37/hr  [deprecated]  ✗ RAM 30 GB < required 120 GB
+  --  f1-micro                  $  0.03/hr  [tombstoned]  ✗ RAM 1 GB < required 120 GB
 ```
 
 ---

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 No unreleased changes.
 
+## [0.1.1] - 2026-06-02
+
+### Changed
+- Regenerated the README offline-example output for cloudfit-core 0.4.0 (candidate-relative cost scoring; the cheap near-exact-fit now ranks first).
+
 ## [0.1.0] - 2026-05-22
 
 ### Added
