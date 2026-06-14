@@ -74,11 +74,22 @@ def normalize_machine_type(
 
 
 def _detect_local_ssd(name: str, raw: dict[str, Any]) -> float:
+    """Estimate local SSD in TB.
+
+    Prefers the exact ``scratchDisks`` count from the API (375 GB per disk).
+    When that is absent but the name carries the ``-lssd`` suffix, returns a
+    fixed 1.5 TB placeholder.
+
+    Limitation: the name-suffix fallback does not vary by size variant, so
+    ``c3d-highcpu-4-lssd`` and ``c3d-standard-180-lssd`` both report 1.5 TB.
+    This only applies when the API omits ``scratchDisks``; in normal fetches
+    the exact count is used. Per-variant sizing is a future enhancement.
+    """
     scratch = raw.get("scratchDisks", [])
     if scratch:
         return round(len(scratch) * 375 / 1024, 2)
     if "lssd" in name.lower():
-        return 1.5   # conservative default for lssd suffix variants
+        return 1.5   # placeholder; see docstring limitation
     return 0.0
 
 

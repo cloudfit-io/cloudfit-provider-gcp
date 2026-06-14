@@ -16,7 +16,7 @@ Fetches machine types, pricing, and availability from the GCP Compute Engine API
 pip install cloudfit-provider-gcp
 ```
 
-Requires Python 3.9+ and `cloudfit-core>=0.1.0`.
+Requires Python 3.10+ and `cloudfit-core>=0.6.1`.
 
 ---
 

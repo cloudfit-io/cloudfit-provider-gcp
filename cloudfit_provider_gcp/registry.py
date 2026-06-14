@@ -27,7 +27,7 @@ status='tombstoned' so existing configs can warn rather than break silently.
 from __future__ import annotations
 import logging
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from cloudfit.models import MachineType
@@ -127,8 +127,13 @@ def write_to_registry(
         raise RuntimeError(f"Registry write failed: {exc}") from exc
 
 
-def _to_row(mt: "MachineType", fetched_at: datetime) -> dict:
-    """Convert a MachineType to a registry row dict."""
+def _to_row(mt: "MachineType", fetched_at: datetime) -> dict[str, Any]:
+    """Convert a MachineType to a registry row dict.
+
+    ``gpu_vram_gb`` and ``generation`` may be ``None``; psycopg2 binds Python
+    ``None`` to SQL ``NULL`` for parameterized queries, so the nullable columns
+    receive NULL without any explicit coercion here.
+    """
     return {
         "id":           mt.id,
         "provider":     mt.provider,

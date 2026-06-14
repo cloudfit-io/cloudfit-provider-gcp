@@ -148,12 +148,14 @@ class PricingClient:
             tier = expr.tiered_rates[0]
             nanos = tier.unit_price.nanos
             units = tier.unit_price.units
-            return units + nanos / _NANO
+            return float(units + nanos / _NANO)
         except (IndexError, AttributeError):
             return 0.0
 
     @staticmethod
-    def _parse_sku(sku: Any, core_prices: dict, ram_prices: dict) -> None:
+    def _parse_sku(
+        sku: Any, core_prices: dict[str, float], ram_prices: dict[str, float]
+    ) -> None:
         """Parse a single SKU into core or RAM price maps."""
         desc = sku.description.lower()
         price = PricingClient._nano_to_usd(sku.pricing_info)

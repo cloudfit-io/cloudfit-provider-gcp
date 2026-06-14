@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 import logging
-from typing import Iterator
+from typing import Any, Iterator
 
 from cloudfit.models import MachineType
 from cloudfit.providers.base import Provider
@@ -159,7 +159,7 @@ class GCPProvider(Provider):
 
     # ── Internal helpers ──────────────────────────────────────────────────
 
-    def _get_compute_client(self):
+    def _get_compute_client(self) -> Any:
         """Lazy-initialize the Compute Engine client."""
         if self._compute_client is None:
             try:
@@ -172,7 +172,7 @@ class GCPProvider(Provider):
                 ) from exc
         return self._compute_client
 
-    def _list_machine_types(self, client, zone: str) -> Iterator[dict]:
+    def _list_machine_types(self, client: Any, zone: str) -> Iterator[dict[str, Any]]:
         """List all machine types in a zone, returning raw dicts."""
         from google.cloud import compute_v1
 
@@ -182,11 +182,12 @@ class GCPProvider(Provider):
         )
         page_result = client.list(request=request)
         for mt in page_result:
-            yield type(mt).to_dict(mt)
+            row: dict[str, Any] = type(mt).to_dict(mt)
+            yield row
 
     def _get_machine_type_raw(
         self, instance_id: str, region: str
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         """Fetch a single machine type by name."""
         from google.cloud import compute_v1
 
@@ -199,6 +200,7 @@ class GCPProvider(Provider):
                 machine_type=instance_id,
             )
             mt = client.get(request=request)
-            return type(mt).to_dict(mt)
+            row: dict[str, Any] = type(mt).to_dict(mt)
+            return row
         except Exception:
             return None

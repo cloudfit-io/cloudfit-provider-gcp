@@ -5,9 +5,18 @@ All notable changes to `cloudfit-provider-gcp` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.2] - 2026-06-14
 
-No unreleased changes.
+### Changed
+- Require `cloudfit-core>=0.6.1` (archetype-aware scoring, validated weights, `extra="forbid"` models, and the `py.typed` marker).
+- Minimum Python is now 3.10 (matches cloudfit-core; PEP 604 unions in the core models are not reliably evaluable on 3.9).
+
+### Added
+- Full type annotations across `provider.py`, `pricing.py`, and `registry.py`; the package now passes `mypy --strict` against a typed cloudfit-core.
+- Unit tests for `registry.write_to_registry` (mock psycopg2, no live database) and `pricing.reconstruct_price` / SKU parsing (no GCP credentials).
+
+### Fixed
+- Documented the `_detect_local_ssd` name-suffix fallback limitation (fixed 1.5 TB regardless of size variant when the API omits `scratchDisks`).
 
 ## [0.1.1] - 2026-06-02
 
@@ -29,5 +38,6 @@ No unreleased changes.
 - Examples directory with live (`recommend.py`) and offline (`recommend_offline.py`) flows showing provider → core integration.
 - Apache 2.0 license. CITATION.cff for academic citation.
 
-[Unreleased]: https://github.com/cloudfit-io/cloudfit-provider-gcp/compare/v0.1.0...HEAD
+[0.1.2]: https://github.com/cloudfit-io/cloudfit-provider-gcp/releases/tag/v0.1.2
+[0.1.1]: https://github.com/cloudfit-io/cloudfit-provider-gcp/releases/tag/v0.1.1
 [0.1.0]: https://github.com/cloudfit-io/cloudfit-provider-gcp/releases/tag/v0.1.0
