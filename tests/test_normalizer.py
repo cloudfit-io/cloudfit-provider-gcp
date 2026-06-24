@@ -95,3 +95,28 @@ class TestNormalizeMachineType:
         raw = get_raw(raw_machines, "n2-standard-32")
         mt  = normalize_machine_type(raw, region="us-central1")
         assert isinstance(mt, MachineType)
+
+    def test_perf_factor_populated_from_core_table(self, raw_machines):
+        from cloudfit.scorer import perf_factor_for
+        raw = get_raw(raw_machines, "c2-standard-60")
+        mt  = normalize_machine_type(raw, region="us-central1")
+        assert mt.perf_factor == perf_factor_for("c2-standard-60")
+        assert mt.perf_factor is not None and mt.perf_factor > 1.0  # c2 is above baseline
+
+    def test_gpu_type_populated(self, raw_machines):
+        raw = get_raw(raw_machines, "a2-highgpu-1g")
+        mt  = normalize_machine_type(raw, region="us-central1")
+        assert mt.gpu_type == "nvidia-tesla-a100"
+
+    def test_no_gpu_type_when_no_gpu(self, raw_machines):
+        raw = get_raw(raw_machines, "n2-standard-32")
+        mt  = normalize_machine_type(raw, region="us-central1")
+        assert mt.gpu_type is None
+
+    def test_spot_and_cud_prices_passed_through(self, raw_machines):
+        raw = get_raw(raw_machines, "n2-standard-32")
+        mt  = normalize_machine_type(
+            raw, region="us-central1", price_hr=1.0, spot_price_hr=0.3, cud_1yr_price_hr=0.6,
+        )
+        assert mt.spot_price_hr == 0.3
+        assert mt.cud_1yr_price_hr == 0.6

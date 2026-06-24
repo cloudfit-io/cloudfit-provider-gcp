@@ -8,7 +8,7 @@ from cloudfit.models import MachineType
 from cloudfit.providers.base import Provider
 
 from .normalizer import normalize_machine_type
-from .pricing import PricingClient, reconstruct_price
+from .pricing import PricingClient, RegionPrices, reconstruct_price
 from .regions import GCP_REGIONS, region_to_zone
 
 logger = logging.getLogger(__name__)
@@ -60,14 +60,12 @@ class GCPProvider(Provider):
         raw_list = self._list_machine_types(client, zone)
 
         # Fetch pricing once for the whole region
+        prices: RegionPrices | None = None
         if self._pricing_client:
             try:
-                core_prices, ram_prices = self._pricing_client.get_price_map(region)
+                prices = self._pricing_client.get_price_map(region)
             except Exception as exc:
                 logger.warning("Pricing fetch failed for %s: %s", region, exc)
-                core_prices, ram_prices = {}, {}
-        else:
-            core_prices, ram_prices = {}, {}
 
         instances: list[MachineType] = []
         for raw in raw_list:
@@ -75,8 +73,19 @@ class GCPProvider(Provider):
                 name   = raw.get("name", "")
                 vcpu   = raw.get("guestCpus", 0)
                 ram_gb = raw.get("memoryMb", 0) / 1024
-                price  = reconstruct_price(name, vcpu, ram_gb, core_prices, ram_prices)
-                mt     = normalize_machine_type(raw, region=region, price_hr=price)
+                if prices is not None:
+                    on_demand = reconstruct_price(name, vcpu, ram_gb, *prices.on_demand)
+                    spot      = reconstruct_price(name, vcpu, ram_gb, *prices.spot)
+                    cud       = reconstruct_price(name, vcpu, ram_gb, *prices.cud_1yr)
+                else:
+                    on_demand = spot = cud = 0.0
+                mt = normalize_machine_type(
+                    raw,
+                    region=region,
+                    price_hr=on_demand,
+                    spot_price_hr=spot or None,
+                    cud_1yr_price_hr=cud or None,
+                )
                 instances.append(mt)
             except Exception as exc:
                 logger.debug("Skipped machine type %s: %s", raw.get("name"), exc)
@@ -125,14 +134,14 @@ class GCPProvider(Provider):
         if not self._pricing_client:
             return 0.0
         try:
-            core_prices, ram_prices = self._pricing_client.get_price_map(region)
+            prices = self._pricing_client.get_price_map(region)
             # We need vcpu + ram to reconstruct — fetch from compute API
             raw = self._get_machine_type_raw(instance_id, region)
             if not raw:
                 return 0.0
             vcpu   = raw.get("guestCpus", 0)
             ram_gb = raw.get("memoryMb", 0) / 1024
-            return reconstruct_price(instance_id, vcpu, ram_gb, core_prices, ram_prices)
+            return reconstruct_price(instance_id, vcpu, ram_gb, *prices.on_demand)
         except Exception as exc:
             logger.warning("Pricing lookup failed for %s/%s: %s", instance_id, region, exc)
             return 0.0

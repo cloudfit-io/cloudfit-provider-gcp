@@ -5,6 +5,19 @@ All notable changes to `cloudfit-provider-gcp` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Require `cloudfit-core>=0.8.0` for the scoring-depth fields (`perf_factor`, `gpu_type`, spot/committed-use pricing, explainability).
+
+### Added
+- **Populate `perf_factor` and `gpu_type` (scoring-depth Layers 1 and 3).** `normalize_machine_type` now sets `perf_factor` from the core `PERF_FACTORS` table (via `perf_factor_for`) and `gpu_type` from the accelerator name, so the engine scores effective per-vCPU capacity and GPU throughput instead of raw counts.
+- **Fetch spot and 1-year committed-use prices (scoring-depth Layer 2).** `PricingClient.get_price_map` now returns a `RegionPrices` with on-demand, spot, and `cud_1yr` component maps, parsed from the Billing Catalog (preemptible/spot SKUs by city label; committed-use SKUs by region group). `normalize_machine_type` accepts `spot_price_hr` and `cud_1yr_price_hr`, which `GCPProvider.fetch_instances` reconstructs per instance. Missing modes fall back to on-demand. Committed-use region-group matching is best-effort.
+- Tests for `perf_factor`/`gpu_type` population and spot/committed-use SKU parsing (no GCP credentials).
+
+### Changed (internal)
+- `PricingClient.get_price_map` return type changed from `(core_prices, ram_prices)` to `RegionPrices`. The only caller (`provider.py`) is updated; downstream callers using `*prices.on_demand` get the previous behavior.
+
 ## [0.1.2] - 2026-06-14
 
 ### Changed

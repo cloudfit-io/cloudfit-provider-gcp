@@ -21,9 +21,15 @@ be 0 for unpriced instances.
 
 from __future__ import annotations
 import logging
+import re
+from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Family token in a SKU description, e.g. "n2" in "N2 Instance Core ...".
+# Excludes the catalog version token ("v1") handled separately in _family_token.
+_FAMILY_RE = re.compile(r"^[a-z]\d+[a-z]*$")
 
 # Nano-USD to USD conversion
 _NANO = 1_000_000_000
@@ -64,26 +70,72 @@ _REGION_TO_BILLING_LABEL: dict[str, str] = {
 }
 
 
+def _cud_group(region: str) -> str:
+    """Billing region-group label used in committed-use SKU descriptions.
+
+    Committed-use discounts are priced per region group (e.g. "Americas"), not
+    per city like on-demand and spot SKUs. Returns "" for an unmapped region,
+    in which case CUD matching is skipped and cost falls back to on-demand.
+    """
+    if region.startswith(("us-", "northamerica-", "southamerica-")):
+        return "Americas"
+    if region.startswith("europe-"):
+        return "Europe"
+    if region.startswith(("asia-", "australia-")):
+        return "Asia Pacific"
+    return ""
+
+
+def _family_token(desc_lower: str) -> str | None:
+    """Extract the machine family token (e.g. "n2") from a SKU description.
+
+    Skips the catalog version token ("v1") that precedes the family in
+    committed-use SKUs ("Commitment v1: N2 Cpu ...").
+    """
+    for tok in re.split(r"[\s:]+", desc_lower):
+        if tok.startswith("v") and tok[1:].isdigit():
+            continue
+        if _FAMILY_RE.match(tok):
+            return tok
+    return None
+
+
+# A (core_prices, ram_prices) pair: family → unit $/hr ($/vCPU/hr and $/GB/hr).
+ComponentPrices = tuple[dict[str, float], dict[str, float]]
+
+
+@dataclass
+class RegionPrices:
+    """Per-region component prices for each pricing mode.
+
+    Each field is a ``(core_prices, ram_prices)`` pair keyed by machine family.
+    Callers reconstruct a per-instance price with :func:`reconstruct_price`.
+    Empty maps mean that mode was unavailable; cost then falls back to on-demand.
+    """
+
+    on_demand: ComponentPrices
+    spot: ComponentPrices
+    cud_1yr: ComponentPrices
+
+    @classmethod
+    def empty(cls) -> "RegionPrices":
+        return cls(({}, {}), ({}, {}), ({}, {}))
+
+
 class PricingClient:
     """Wraps the Cloud Billing Catalog API to return per-instance prices.
 
     Usage:
         client = PricingClient()
-        price_map = client.get_price_map(region="us-central1")
-        price_hr  = price_map.get("n2-standard-32", 0.0)
+        prices = client.get_price_map(region="us-central1")
+        price_hr = reconstruct_price("n2-standard-32", 32, 128.0, *prices.on_demand)
     """
 
     def __init__(self) -> None:
-        self._cache: dict[str, tuple[dict[str, float], dict[str, float]]] = {}
+        self._cache: dict[str, RegionPrices] = {}
 
-    def get_price_map(
-        self, region: str
-    ) -> tuple[dict[str, float], dict[str, float]]:
-        """Return component price maps for a region: ``(core_prices, ram_prices)``.
-
-        Each map is keyed by machine family (e.g. ``"n2"``) → unit price/hr —
-        ``core_prices`` is $/vCPU/hr and ``ram_prices`` is $/GB/hr. Callers
-        reconstruct a per-instance price with :func:`reconstruct_price`.
+    def get_price_map(self, region: str) -> RegionPrices:
+        """Return on-demand, spot, and 1-year committed-use prices for a region.
 
         Results are cached per region for the lifetime of the client instance.
         For production use, instantiate one PricingClient per cron run.
@@ -92,28 +144,28 @@ class PricingClient:
             region: GCP region (e.g. "us-central1")
 
         Returns:
-            ``(core_prices, ram_prices)``. Both maps are empty if the Billing
-            API is unavailable — instances then fall back to ``price_hr=0.0``.
+            A RegionPrices. All maps are empty if the Billing API is unavailable,
+            so instances then fall back to ``price_hr=0.0``; spot/CUD maps are
+            empty when those SKUs are absent, so those modes fall back to
+            on-demand at scoring time.
         """
         if region in self._cache:
             return self._cache[region]
 
         try:
-            price_maps = self._fetch_price_map(region)
+            prices = self._fetch_price_map(region)
         except Exception as exc:
             logger.warning(
                 "Failed to fetch pricing for region %s: %s. "
                 "Instances will have price_hr=0.0.",
                 region, exc,
             )
-            price_maps = ({}, {})
+            prices = RegionPrices.empty()
 
-        self._cache[region] = price_maps
-        return price_maps
+        self._cache[region] = prices
+        return prices
 
-    def _fetch_price_map(
-        self, region: str
-    ) -> tuple[dict[str, float], dict[str, float]]:
+    def _fetch_price_map(self, region: str) -> RegionPrices:
         """Internal: fetch and parse SKUs from the Billing Catalog API."""
         try:
             from google.cloud import billing_v1
@@ -127,18 +179,12 @@ class PricingClient:
         parent    = f"services/{_COMPUTE_SERVICE_ID}"
         skus      = client.list_skus(parent=parent)
         label     = _REGION_TO_BILLING_LABEL.get(region, "")
+        cud_group = _cud_group(region)
 
-        # Collect core and RAM prices per machine family
-        core_prices: dict[str, float] = {}   # family → $/vCPU/hr
-        ram_prices:  dict[str, float] = {}   # family → $/GB/hr
-
+        prices = RegionPrices.empty()
         for sku in skus:
-            if label and label not in sku.description:
-                continue
-            self._parse_sku(sku, core_prices, ram_prices)
-
-        # Caller reconstructs per-instance price from family + size.
-        return core_prices, ram_prices
+            self._parse_sku(sku, prices, label, cud_group)
+        return prices
 
     @staticmethod
     def _nano_to_usd(pricing_info: Any) -> float:
@@ -154,26 +200,53 @@ class PricingClient:
 
     @staticmethod
     def _parse_sku(
-        sku: Any, core_prices: dict[str, float], ram_prices: dict[str, float]
+        sku: Any,
+        prices: RegionPrices,
+        region_label: str,
+        cud_group: str,
     ) -> None:
-        """Parse a single SKU into core or RAM price maps."""
+        """Classify one SKU by pricing mode and route its price into the maps.
+
+        On-demand and spot SKUs name a city ("... running in Iowa") and use
+        "Instance Core"/"Instance Ram"; committed-use SKUs name a region group
+        ("... in Americas for 1 Year") and use "Cpu"/"Ram". Best-effort: a SKU
+        whose region label does not match is skipped, so the mode falls back to
+        on-demand (spot/CUD) or to price_hr=0.0 (on-demand) downstream.
+        """
         desc = sku.description.lower()
         price = PricingClient._nano_to_usd(sku.pricing_info)
         if price <= 0:
             return
 
-        # Identify family from description
-        # e.g. "N2 Instance Core running in Iowa" → family "n2", type "core"
-        parts = desc.split()
-        if len(parts) < 3:
+        if "preemptible" in desc or "spot" in desc:
+            core_prices, ram_prices = prices.spot
+            label, is_cud = region_label, False
+        elif "commitment" in desc and "1 year" in desc:
+            core_prices, ram_prices = prices.cud_1yr
+            label, is_cud = cud_group, True
+        else:
+            core_prices, ram_prices = prices.on_demand
+            label, is_cud = region_label, False
+
+        if label and label.lower() not in desc:
             return
 
-        family = parts[0].lower()
+        family = _family_token(desc)
+        if family is None:
+            return
 
-        if "core" in desc and "instance" in desc:
-            core_prices[family] = price
-        elif "ram" in desc and "instance" in desc:
-            ram_prices[family] = price
+        if is_cud:
+            # Committed-use SKUs: "... N2 Cpu in Americas for 1 Year" / "... N2 Ram ...".
+            if "cpu" in desc:
+                core_prices[family] = price
+            elif "ram" in desc:
+                ram_prices[family] = price
+        else:
+            # On-demand and spot SKUs: "N2 Instance Core ..." / "N2 Instance Ram ...".
+            if "core" in desc and "instance" in desc:
+                core_prices[family] = price
+            elif "ram" in desc and "instance" in desc:
+                ram_prices[family] = price
 
 
 def reconstruct_price(

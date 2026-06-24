@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Any
 from cloudfit.models import MachineType
+from cloudfit.scorer import perf_factor_for
 
 _DEPRECATION_MAP: dict[str, str] = {
     "ACTIVE":     "active",
@@ -34,16 +35,23 @@ def normalize_machine_type(
     raw: dict[str, Any],
     region: str,
     price_hr: float = 0.0,
+    spot_price_hr: float | None = None,
+    cud_1yr_price_hr: float | None = None,
 ) -> MachineType:
     """Convert a raw GCP MachineType API dict to a cloudfit MachineType.
 
     Args:
-        raw:      Raw dict from google.cloud.compute_v1.MachineType
-        region:   GCP region this machine type was fetched from
-        price_hr: On-demand price/hr from Billing API (fetched separately)
+        raw:              Raw dict from google.cloud.compute_v1.MachineType
+        region:           GCP region this machine type was fetched from
+        price_hr:         On-demand price/hr from Billing API (fetched separately)
+        spot_price_hr:    Spot/preemptible price/hr, if known (else None)
+        cud_1yr_price_hr: 1-year committed-use price/hr, if known (else None)
 
     Returns:
-        Normalized MachineType ready for cloudfit-core scoring.
+        Normalized MachineType ready for cloudfit-core scoring. perf_factor is
+        populated from the core PERF_FACTORS table (Layer 1) and gpu_type from
+        the accelerator name (Layer 3), so the engine can score effective
+        capacity and GPU throughput.
     """
     name   = raw.get("name", "")
     family = name.split("-")[0].lower() if "-" in name else name.lower()
@@ -52,7 +60,7 @@ def normalize_machine_type(
     vcpu   = raw.get("guestCpus", 0)
 
     local_ssd_tb  = _detect_local_ssd(name, raw)
-    gpu_count, gpu_vram_gb = _detect_gpu(raw)
+    gpu_count, gpu_vram_gb, gpu_type = _detect_gpu(raw)
 
     dep     = raw.get("deprecated") or {}
     status  = _DEPRECATION_MAP.get(dep.get("state", "ACTIVE"), "active")
@@ -64,12 +72,16 @@ def normalize_machine_type(
         vcpu=vcpu,
         ram_gb=round(ram_gb, 1),
         price_hr=price_hr,
+        spot_price_hr=spot_price_hr,
+        cud_1yr_price_hr=cud_1yr_price_hr,
         local_ssd_tb=local_ssd_tb,
         gpu_count=gpu_count,
         gpu_vram_gb=gpu_vram_gb,
+        gpu_type=gpu_type,
         region=region,
         status=status,
         generation=gen,
+        perf_factor=perf_factor_for(name),
     )
 
 
@@ -93,12 +105,13 @@ def _detect_local_ssd(name: str, raw: dict[str, Any]) -> float:
     return 0.0
 
 
-def _detect_gpu(raw: dict[str, Any]) -> tuple[int, int | None]:
+def _detect_gpu(raw: dict[str, Any]) -> tuple[int, int | None, str | None]:
+    """Return (gpu_count, gpu_vram_gb, gpu_type) from the accelerators field."""
     accs = raw.get("accelerators", [])
     if not accs:
-        return 0, None
+        return 0, None, None
     acc   = accs[0]
     count = acc.get("guestAcceleratorCount", 0)
     atype = acc.get("guestAcceleratorType", "").lower()
     vram  = next((v for k, v in _GPU_VRAM_MAP.items() if k in atype), None)
-    return count, vram
+    return count, vram, atype or None
