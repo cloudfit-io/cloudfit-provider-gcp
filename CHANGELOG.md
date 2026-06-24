@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_No unreleased changes._
+
+## [0.2.0] - 2026-06-23
+
 ### Changed
 - Require `cloudfit-core>=0.8.0` for the scoring-depth fields (`perf_factor`, `gpu_type`, spot/committed-use pricing, explainability).
 

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cloudfit-provider-gcp"
-version = "0.1.2"
+version = "0.2.0"
 description = "GCP Compute Engine provider plugin for cloudfit-core"
 readme = "README.md"
 license = { text = "Apache-2.0" }
