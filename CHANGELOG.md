@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_No unreleased changes._
+
+## [0.3.0] - 2026-10-22
+
 ### Added
 - **Snapshot tooling.** `examples/generate_snapshot.py` builds a fresh snapshot from a live fetch; `examples/refresh_prices.py` refreshes prices on existing curated snapshots in place (idempotent, GPU prices preserved). A `make refresh-snapshot` target and a scheduled GitHub Actions workflow (`.github/workflows/refresh-snapshot.yml`) run the refresh weekly and open a PR in cloudfit-api and cloudfit-ui. Pricing stays off the request path.
 
