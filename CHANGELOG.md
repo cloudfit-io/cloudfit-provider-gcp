@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Python 3.13 and 3.14: tested in CI and declared in the package classifiers.
+
 ### Changed
 - The `refresh-snapshot` workflow also updates `SNAPSHOT_DATE` in cloudfit-ui's `app.py` when the snapshot prices change, so the demo's "last refresh" date stays accurate.
 - README documents spot and committed-use pricing, the weekly snapshot refresh workflow, `cloudfit-core>=0.8.0`, and the current example output and file layout; the CITATION abstract mentions spot and committed-use pricing.
