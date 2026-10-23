@@ -43,7 +43,7 @@ registry = [
 dev = [
   "pytest>=7.0",
   "pytest-cov",
-  "ruff",
+  "ruff>=0.15,<0.16",
   "mypy",
   "pytest-mock",
 ]
