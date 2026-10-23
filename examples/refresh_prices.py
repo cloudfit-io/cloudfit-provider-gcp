@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from typing import Any
 
 from cloudfit.models import MachineType
@@ -77,6 +78,12 @@ def main() -> None:
     client = PricingClient()
     print(f"Fetching pricing for {len(regions)} region(s): {', '.join(regions)} ...")
     maps = {region: client.get_price_map(region) for region in regions}
+
+    # PricingClient logs and returns empty maps on a failed fetch. Fail loudly
+    # instead, so a scheduled run with broken credentials doesn't pass silently.
+    failed = [region for region, prices in maps.items() if not prices.on_demand[0]]
+    if failed:
+        sys.exit(f"error: no on-demand prices fetched for {', '.join(failed)}; snapshots left unchanged.")
 
     for path, rows in data.items():
         out = [_refresh_row(row, maps) for row in rows]
