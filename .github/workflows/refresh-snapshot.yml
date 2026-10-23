@@ -75,6 +75,14 @@ jobs:
             cloudfit-api/data/gcp_snapshot.json \
             cloudfit-ui/data/gcp_snapshot.json
 
+      # The demo shows when its prices were last refreshed; keep that date in
+      # step with the data, but only when prices actually changed.
+      - name: Update cloudfit-ui snapshot date
+        run: |
+          if ! git -C cloudfit-ui diff --quiet -- data/gcp_snapshot.json; then
+            sed -i -E "s/^SNAPSHOT_DATE = \"[0-9-]+\"/SNAPSHOT_DATE = \"$(date -u +%F)\"/" cloudfit-ui/app.py
+          fi
+
       - name: Open PR in cloudfit-api
         uses: peter-evans/create-pull-request@v6
         with:

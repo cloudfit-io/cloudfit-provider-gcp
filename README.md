@@ -6,7 +6,7 @@
 
 **GCP Compute Engine provider plugin for [cloudfit-core](https://github.com/cloudfit-io/cloudfit-core).**
 
-Fetches machine types, pricing, and availability from the GCP Compute Engine API and normalizes them into `MachineType` objects that `cloudfit-core` understands.
+Fetches machine types, availability, and on-demand, spot, and 1-year committed-use pricing from the GCP Compute Engine and Cloud Billing Catalog APIs, and normalizes them into `MachineType` objects that `cloudfit-core` understands, including each family's `perf_factor` and each GPU's `gpu_type`.
 
 ---
 
@@ -16,7 +16,7 @@ Fetches machine types, pricing, and availability from the GCP Compute Engine API
 pip install cloudfit-provider-gcp
 ```
 
-Requires Python 3.10+ and `cloudfit-core>=0.6.1`.
+Requires Python 3.10+ and `cloudfit-core>=0.8.0`.
 
 ---
 
@@ -97,8 +97,8 @@ python examples/recommend_offline.py
 Ranking for 32 vCPU / 120 GB (optimize_for=balanced):
 
   ok  n2-standard-32            score=1.00  $  1.53/hr  [active]
-  ok  c2-standard-60            score=0.61  $  2.82/hr  [active]
-  ok  c3d-standard-60-lssd      score=0.60  $  2.87/hr  [active]
+  ok  c3d-standard-60-lssd      score=0.62  $  2.87/hr  [active]
+  ok  c2-standard-60            score=0.59  $  2.82/hr  [active]
   --  a2-highgpu-1g             $  0.73/hr  [active]  ✗ RAM 85 GB < required 120 GB
   --  n1-standard-8             $  0.37/hr  [deprecated]  ✗ RAM 30 GB < required 120 GB
   --  f1-micro                  $  0.03/hr  [tombstoned]  ✗ RAM 1 GB < required 120 GB
@@ -108,18 +108,42 @@ Ranking for 32 vCPU / 120 GB (optimize_for=balanced):
 
 ## Pricing
 
-Pricing is fetched from the [GCP Cloud Billing Catalog API](https://cloud.google.com/billing/docs/reference/rest). Prices are on-demand (no committed-use or spot discount), reconstructed per instance from each family's vCPU and RAM SKU rates. If a family's SKUs can't be matched, `price_hr` falls back to `0.0` and the instance is still scored (its `cost_score` is just 0).
+Pricing is fetched from the [GCP Cloud Billing Catalog API](https://cloud.google.com/billing/docs/reference/rest), using each SKU's structured category (usage type, resource group, service regions) rather than parsing descriptions. `fetch_instances` fills three prices per machine type, each reconstructed from the family's per-vCPU and per-GB rates for the region:
+
+| Field | Source SKUs |
+|---|---|
+| `price_hr` | on-demand |
+| `spot_price_hr` | spot (preemptible) |
+| `cud_1yr_price_hr` | 1-year committed use |
+
+cloudfit-core scores whichever one the workload's `pricing_mode` selects. If a family's SKUs can't be matched, that price is left unset: `price_hr` falls back to `0.0` (the instance is still scored, with `cost_score` 0), and a missing spot or committed-use price falls back to on-demand at scoring time.
+
+**Limitation:** the reconstruction covers CPU and RAM only. Accelerator cost is not added, so GPU machine types are under-priced by it; supply a known `price_hr` for GPU instances (the bundled snapshots do).
 
 ```python
-price_hr = provider.get_pricing("n2-standard-32", region="us-central1")
-# → 1.5468
+price_hr = provider.get_pricing("n2-standard-32", region="us-central1")  # on-demand
+# → about 1.55
 ```
 
 ---
 
-## Cron / scheduled refresh
+## Scheduled refresh
 
-For production use, run the fetcher on a daily schedule and write results to the cloudfit registry store (PostgreSQL). The recommended pattern is a Cloud Scheduler trigger invoking a Cloud Run Job.
+### Bundled snapshots (weekly, automated)
+
+`cloudfit-api` and `cloudfit-ui` ship a curated 875-instance snapshot. The [`refresh-snapshot`](.github/workflows/refresh-snapshot.yml) workflow in this repo runs every Monday at 06:00 UTC: it refreshes on-demand, spot, and committed-use prices in both snapshots in place with [`examples/refresh_prices.py`](examples/refresh_prices.py) (row set, regions, and statuses are preserved; GPU prices are left as is) and opens a pull request in each repo. The run fails instead of opening a PR if any region's prices can't be fetched. It authenticates to GCP with Workload Identity Federation (no stored keys) and needs the `SNAPSHOT_TOKEN`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, and `GCP_SERVICE_ACCOUNT` secrets; see the comments in the workflow file.
+
+To refresh locally (needs `gcloud auth application-default login`):
+
+```bash
+make refresh-snapshot      # refreshes ../cloudfit-api and ../cloudfit-ui snapshots in place
+```
+
+To build a brand-new snapshot from a live fetch instead, use [`examples/generate_snapshot.py`](examples/generate_snapshot.py).
+
+### Registry (PostgreSQL)
+
+For a live registry, run the fetcher on a schedule and write results to the cloudfit registry store (PostgreSQL). The recommended pattern is a Cloud Scheduler trigger invoking a Cloud Run Job.
 
 ```python
 from cloudfit_provider_gcp import GCPProvider
@@ -153,17 +177,21 @@ cloudfit-provider-gcp/
 │   ├── __init__.py          # exports GCPProvider
 │   ├── provider.py          # GCPProvider: implements Provider base class
 │   ├── normalizer.py        # raw GCP API response → MachineType
-│   ├── pricing.py           # Cloud Billing Catalog API → price_hr
+│   ├── pricing.py           # Cloud Billing Catalog API → on-demand, spot, CUD prices
 │   ├── regions.py           # GCP region list + helpers
 │   └── registry.py          # write normalized instances to PostgreSQL
 │
 ├── examples/
-│   ├── recommend.py         # live fetch → rank (needs GCP credentials)
-│   └── recommend_offline.py # fixture → rank (no credentials needed)
+│   ├── recommend.py           # live fetch → rank (needs GCP credentials)
+│   ├── recommend_offline.py   # fixture → rank (no credentials needed)
+│   ├── generate_snapshot.py   # build a fresh snapshot from a live fetch
+│   └── refresh_prices.py      # refresh prices in existing snapshots in place
 │
 └── tests/
     ├── test_normalizer.py   # unit tests: no API calls needed
+    ├── test_pricing.py      # SKU parsing and price reconstruction
     ├── test_regions.py
+    ├── test_registry.py
     └── fixtures/
         └── machine_type_response.json   # recorded GCP API response
 ```

@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_No unreleased changes._
+### Changed
+- The `refresh-snapshot` workflow also updates `SNAPSHOT_DATE` in cloudfit-ui's `app.py` when the snapshot prices change, so the demo's "last refresh" date stays accurate.
+- README documents spot and committed-use pricing, the weekly snapshot refresh workflow, `cloudfit-core>=0.8.0`, and the current example output and file layout; the CITATION abstract mentions spot and committed-use pricing.
+
+### Fixed
+- `examples/refresh_prices.py` now exits non-zero, leaving the snapshots untouched, when any region's price fetch fails. Previously a failed fetch (e.g. expired credentials) was only logged, so the scheduled workflow reported success while refreshing nothing.
 
 ## [0.3.1] - 2026-10-22
 
