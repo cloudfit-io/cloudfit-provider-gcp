@@ -1,22 +1,29 @@
-"""Fetches GCP on-demand pricing from the Cloud Billing Catalog API.
+"""Fetches GCP pricing from the Cloud Billing Catalog API.
 
-GCP pricing is not returned by the Compute Engine API — it lives in a
-separate Cloud Billing Catalog. This module fetches and caches a price
-map (machine_type_id → price_hr) for a given region.
+GCP pricing is not returned by the Compute Engine API — it lives in a separate
+Cloud Billing Catalog. This module fetches per-region component prices (per-vCPU
+and per-GB rates, per machine family) for on-demand, spot, and 1-year
+committed-use pricing, which callers combine with :func:`reconstruct_price`.
 
-Billing API notes
------------------
-- Service ID for Compute Engine: "6F81-5844-456A"
-- SKU descriptions follow the pattern:
-    "N2 Instance Core running in Americas"
-    "N2 Instance Ram running in Americas"
-  We reconstruct per-instance price from (cores × core_price) + (ram × ram_price).
-- Prices are in USD, expressed as nano-USD units in the API response.
-  Divide by 1,000,000,000 to get USD.
+Why structured fields, not description parsing
+----------------------------------------------
+The catalog has tens of thousands of Compute SKUs whose descriptions vary widely
+(Sole Tenancy, Custom, Premium, GPU-attach, region groups vs cities, ...). Rather
+than parse free text, we key off the SKU's structured fields:
 
-This module returns a best-effort price. If a SKU cannot be matched,
-price_hr defaults to 0.0 — the scorer will still work, cost_score will
-be 0 for unpriced instances.
+- ``category.usage_type``   → OnDemand / Preemptible (spot) / Commit1Yr (CUD)
+- ``category.resource_group`` → CPU (core) / RAM
+- ``service_regions``       → the exact region ids the SKU applies to
+
+The machine family is taken from the description's family token (e.g. "n2" in
+"N2 Instance Core running in Americas"), with a small alias table for the few
+families GCP names by category ("Compute optimized" = c2, "Memory-optimized" = m1).
+SKU variants that are not predefined on-demand shapes (Sole Tenancy, Custom,
+Premium, Extended) are excluded.
+
+This is still best-effort: a family with no matching SKU gets no price, and the
+scorer treats an unpriced instance as cost 0.0 (never free). Prices are in USD,
+expressed as nano-USD; divide by 1e9.
 """
 
 from __future__ import annotations
@@ -37,53 +44,28 @@ _NANO = 1_000_000_000
 # GCP Compute Engine billing service ID
 _COMPUTE_SERVICE_ID = "6F81-5844-456A"
 
-# Region → billing region label used in SKU descriptions
-_REGION_TO_BILLING_LABEL: dict[str, str] = {
-    "us-central1":           "Iowa",
-    "us-east1":              "South Carolina",
-    "us-east4":              "Northern Virginia",
-    "us-west1":              "Oregon",
-    "us-west2":              "Los Angeles",
-    "us-west3":              "Salt Lake City",
-    "us-west4":              "Las Vegas",
-    "europe-west1":          "Belgium",
-    "europe-west2":          "London",
-    "europe-west3":          "Frankfurt",
-    "europe-west4":          "Netherlands",
-    "europe-west6":          "Zurich",
-    "europe-central2":       "Warsaw",
-    "europe-north1":         "Finland",
-    "asia-east1":            "Taiwan",
-    "asia-east2":            "Hong Kong",
-    "asia-northeast1":       "Tokyo",
-    "asia-northeast2":       "Osaka",
-    "asia-northeast3":       "Seoul",
-    "asia-south1":           "Mumbai",
-    "asia-south2":           "Delhi",
-    "asia-southeast1":       "Singapore",
-    "asia-southeast2":       "Jakarta",
-    "australia-southeast1":  "Sydney",
-    "australia-southeast2":  "Melbourne",
-    "northamerica-northeast1": "Montreal",
-    "northamerica-northeast2": "Toronto",
-    "southamerica-east1":    "Sao Paulo",
+# SKU category usage_type → our pricing mode (matches RegionPrices field names).
+# Other usage types (Commit3Yr, etc.) are intentionally ignored.
+_USAGE_TYPE_TO_MODE: dict[str, str] = {
+    "OnDemand": "on_demand",
+    "Preemptible": "spot",
+    "Commit1Yr": "cud_1yr",
 }
 
+# SKU category resource_group → price component.
+_RESOURCE_GROUP_TO_COMPONENT: dict[str, str] = {"CPU": "core", "RAM": "ram"}
 
-def _cud_group(region: str) -> str:
-    """Billing region-group label used in committed-use SKU descriptions.
+# Description substrings that mark a SKU as not a predefined on-demand shape.
+# Excluding these leaves exactly the base core/ram rate per family and region.
+_EXCLUDE_TOKENS: tuple[str, ...] = ("sole tenancy", "custom", "premium", "extended")
 
-    Committed-use discounts are priced per region group (e.g. "Americas"), not
-    per city like on-demand and spot SKUs. Returns "" for an unmapped region,
-    in which case CUD matching is skipped and cost falls back to on-demand.
-    """
-    if region.startswith(("us-", "northamerica-", "southamerica-")):
-        return "Americas"
-    if region.startswith("europe-"):
-        return "Europe"
-    if region.startswith(("asia-", "australia-")):
-        return "Asia Pacific"
-    return ""
+# Families GCP names by category instead of a family token. A family token in
+# the description always wins (e.g. "M3 Memory-optimized ..." resolves to m3);
+# these aliases only apply when no token is present.
+_CATEGORY_FAMILY_ALIASES: dict[str, str] = {
+    "compute optimized": "c2",
+    "memory-optimized": "m1",
+}
 
 
 def _family_token(desc_lower: str) -> str | None:
@@ -97,6 +79,17 @@ def _family_token(desc_lower: str) -> str | None:
             continue
         if _FAMILY_RE.match(tok):
             return tok
+    return None
+
+
+def _family_for(desc_lower: str) -> str | None:
+    """Resolve a machine family from a SKU description, token first then alias."""
+    token = _family_token(desc_lower)
+    if token is not None:
+        return token
+    for phrase, family in _CATEGORY_FAMILY_ALIASES.items():
+        if phrase in desc_lower:
+            return family
     return None
 
 
@@ -138,7 +131,8 @@ class PricingClient:
         """Return on-demand, spot, and 1-year committed-use prices for a region.
 
         Results are cached per region for the lifetime of the client instance.
-        For production use, instantiate one PricingClient per cron run.
+        For production use, instantiate one PricingClient per cron run; pricing
+        is not meant to be fetched on the request path (see module docs).
 
         Args:
             region: GCP region (e.g. "us-central1")
@@ -168,30 +162,27 @@ class PricingClient:
     def _fetch_price_map(self, region: str) -> RegionPrices:
         """Internal: fetch and parse SKUs from the Billing Catalog API."""
         try:
-            from google.cloud import billing_v1
+            import google.cloud.billing_v1 as billing_v1
         except ImportError as exc:
             raise ImportError(
                 "google-cloud-billing is required for pricing. "
                 "Install with: pip install cloudfit-provider-gcp"
             ) from exc
 
-        client    = billing_v1.CloudCatalogClient()
-        parent    = f"services/{_COMPUTE_SERVICE_ID}"
-        skus      = client.list_skus(parent=parent)
-        label     = _REGION_TO_BILLING_LABEL.get(region, "")
-        cud_group = _cud_group(region)
+        client = billing_v1.CloudCatalogClient()
+        skus = client.list_skus(parent=f"services/{_COMPUTE_SERVICE_ID}")
 
         prices = RegionPrices.empty()
         for sku in skus:
-            self._parse_sku(sku, prices, label, cud_group)
+            self._parse_sku(sku, prices, region)
         return prices
 
     @staticmethod
     def _nano_to_usd(pricing_info: Any) -> float:
-        """Extract USD price per unit from a SKU's pricingInfo."""
+        """Extract USD price per unit from a SKU's pricingInfo (last tier)."""
         try:
             expr = pricing_info[0].pricing_expression
-            tier = expr.tiered_rates[0]
+            tier = expr.tiered_rates[-1]
             nanos = tier.unit_price.nanos
             units = tier.unit_price.units
             return float(units + nanos / _NANO)
@@ -199,54 +190,38 @@ class PricingClient:
             return 0.0
 
     @staticmethod
-    def _parse_sku(
-        sku: Any,
-        prices: RegionPrices,
-        region_label: str,
-        cud_group: str,
-    ) -> None:
-        """Classify one SKU by pricing mode and route its price into the maps.
+    def _parse_sku(sku: Any, prices: RegionPrices, region: str) -> None:
+        """Route one SKU's price into the maps using its structured category.
 
-        On-demand and spot SKUs name a city ("... running in Iowa") and use
-        "Instance Core"/"Instance Ram"; committed-use SKUs name a region group
-        ("... in Americas for 1 Year") and use "Cpu"/"Ram". Best-effort: a SKU
-        whose region label does not match is skipped, so the mode falls back to
-        on-demand (spot/CUD) or to price_hr=0.0 (on-demand) downstream.
+        Keys off ``service_regions`` (exact region match), ``usage_type``
+        (mode), and ``resource_group`` (core vs RAM). Non-predefined shapes
+        (Sole Tenancy / Custom / Premium / Extended) are skipped, and the first
+        match per (family, mode, component) wins.
         """
+        if region not in sku.service_regions:
+            return
+        mode = _USAGE_TYPE_TO_MODE.get(sku.category.usage_type)
+        if mode is None:
+            return
+        component = _RESOURCE_GROUP_TO_COMPONENT.get(sku.category.resource_group)
+        if component is None:
+            return
+
         desc = sku.description.lower()
+        if any(token in desc for token in _EXCLUDE_TOKENS):
+            return
+
         price = PricingClient._nano_to_usd(sku.pricing_info)
         if price <= 0:
             return
 
-        if "preemptible" in desc or "spot" in desc:
-            core_prices, ram_prices = prices.spot
-            label, is_cud = region_label, False
-        elif "commitment" in desc and "1 year" in desc:
-            core_prices, ram_prices = prices.cud_1yr
-            label, is_cud = cud_group, True
-        else:
-            core_prices, ram_prices = prices.on_demand
-            label, is_cud = region_label, False
-
-        if label and label.lower() not in desc:
-            return
-
-        family = _family_token(desc)
+        family = _family_for(desc)
         if family is None:
             return
 
-        if is_cud:
-            # Committed-use SKUs: "... N2 Cpu in Americas for 1 Year" / "... N2 Ram ...".
-            if "cpu" in desc:
-                core_prices[family] = price
-            elif "ram" in desc:
-                ram_prices[family] = price
-        else:
-            # On-demand and spot SKUs: "N2 Instance Core ..." / "N2 Instance Ram ...".
-            if "core" in desc and "instance" in desc:
-                core_prices[family] = price
-            elif "ram" in desc and "instance" in desc:
-                ram_prices[family] = price
+        core_prices, ram_prices = getattr(prices, mode)
+        target = core_prices if component == "core" else ram_prices
+        target.setdefault(family, price)
 
 
 def reconstruct_price(
@@ -256,9 +231,12 @@ def reconstruct_price(
     core_prices: dict[str, float],
     ram_prices: dict[str, float],
 ) -> float:
-    """Reconstruct on-demand price/hr from core + RAM component prices.
+    """Reconstruct a per-hour price from core + RAM component prices.
 
     price = (vcpu × core_price) + (ram_gb × ram_price)
+
+    Pass the component maps for the mode you want (``*prices.on_demand``,
+    ``*prices.spot``, or ``*prices.cud_1yr``).
 
     Args:
         machine_type_id: e.g. "n2-standard-32"
@@ -268,8 +246,12 @@ def reconstruct_price(
         ram_prices:      family → $/GB/hr
 
     Returns:
-        Estimated on-demand price per hour in USD.
+        Estimated price per hour in USD.
         Returns 0.0 if family not found in price maps.
+
+    Limitation: this is a CPU + RAM reconstruction only. Accelerator cost is not
+    included, so GPU machine types are under-priced here; price GPUs from their
+    own catalog SKUs or supply a known price_hr for them.
     """
     family = machine_type_id.split("-")[0].lower()
     core_p = core_prices.get(family, 0.0)

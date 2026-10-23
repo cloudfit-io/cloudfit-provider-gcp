@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_No unreleased changes._
+### Added
+- **Snapshot tooling.** `examples/generate_snapshot.py` builds a fresh snapshot from a live fetch; `examples/refresh_prices.py` refreshes prices on existing curated snapshots in place (idempotent, GPU prices preserved). A `make refresh-snapshot` target and a scheduled GitHub Actions workflow (`.github/workflows/refresh-snapshot.yml`) run the refresh weekly and open a PR in cloudfit-api and cloudfit-ui. Pricing stays off the request path.
+
+### Changed
+- **Rewrote pricing to the current Billing catalog.** The old parser assumed `"<Family> Instance Core running in <City>"` SKUs keyed by a per-region city (e.g. "Iowa"). The live catalog (~31k Compute SKUs) has no such "Iowa" SKU and instead prices predefined instances by region group, split across Sole Tenancy / Custom / Spot / Commitment shapes. Pricing now keys off the SKU's structured fields (`category.usage_type`, `category.resource_group`, `service_regions`) and excludes non-predefined shapes, with a small alias table for category-named families ("Compute optimized" = c2, "Memory-optimized" = m1). On-demand coverage for the bundled regions went from ~10% to ~90% and matches published GCP prices (n2-standard-8 = $0.3885/hr). `PricingClient.get_price_map` keeps the `RegionPrices` shape; `_REGION_TO_BILLING_LABEL` and `_cud_group` are removed.
+
+### Fixed
+- **Live fetches returned `vcpu=0` / `ram_gb=0` / no GPU.** The Compute API client's `to_dict` emits snake_case field names by default (`guest_cpus`, `memory_mb`), but the normalizer reads camelCase (`guestCpus`, `memoryMb`). `_list_machine_types` and `_get_machine_type_raw` now pass `preserving_proto_field_name=False` so the dict keys match what the normalizer expects. (Unit tests passed because the fixture is camelCase; only live fetches were affected.)
+- **`mypy --strict` cleanliness with the Google libraries installed.** Annotated `GCPProvider._compute_client` as `Any` (was inferred `None`, so the lazy client assignment failed) and imported `billing_v1` as a submodule to avoid a namespace `attr-defined` error. These surfaced only when `google-cloud-compute`/`google-cloud-billing` are present.
+
+### Known limitations
+- `reconstruct_price` covers CPU + RAM only; accelerator cost is not added, so GPU machine types are under-priced by the reconstruction. Supply a known `price_hr` for GPU instances (the bundled snapshots do).
 
 ## [0.2.0] - 2026-06-23
 

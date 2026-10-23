@@ -42,7 +42,7 @@ class GCPProvider(Provider):
         self.project_id     = project_id
         self.enable_pricing = enable_pricing
         self._pricing_client = PricingClient() if enable_pricing else None
-        self._compute_client = None   # lazy init — avoids import cost if not used
+        self._compute_client: Any = None  # lazy init — avoids import cost if not used
 
     # ── Provider interface ────────────────────────────────────────────────
 
@@ -191,7 +191,10 @@ class GCPProvider(Provider):
         )
         page_result = client.list(request=request)
         for mt in page_result:
-            row: dict[str, Any] = type(mt).to_dict(mt)
+            # preserving_proto_field_name=False emits camelCase JSON names
+            # (guestCpus, memoryMb, ...), which is what the normalizer reads.
+            # The proto-plus default is snake_case, which would yield vcpu=0.
+            row: dict[str, Any] = type(mt).to_dict(mt, preserving_proto_field_name=False)
             yield row
 
     def _get_machine_type_raw(
@@ -209,7 +212,8 @@ class GCPProvider(Provider):
                 machine_type=instance_id,
             )
             mt = client.get(request=request)
-            row: dict[str, Any] = type(mt).to_dict(mt)
+            # camelCase names to match the normalizer (see _list_machine_types).
+            row: dict[str, Any] = type(mt).to_dict(mt, preserving_proto_field_name=False)
             return row
         except Exception:
             return None

@@ -6,7 +6,7 @@ import pytest
 from cloudfit_provider_gcp.pricing import (
     PricingClient,
     RegionPrices,
-    _cud_group,
+    _family_for,
     reconstruct_price,
 )
 
@@ -40,54 +40,79 @@ class TestNanoToUsd:
         assert PricingClient._nano_to_usd([]) == 0.0
 
 
-def _sku(description: str, units: int, nanos: int):
-    return SimpleNamespace(description=description, pricing_info=_fake_pricing_info(units, nanos))
+def _sku(description, units, nanos, usage_type="OnDemand", resource_group="CPU",
+         regions=("us-central1",)):
+    return SimpleNamespace(
+        description=description,
+        pricing_info=_fake_pricing_info(units, nanos),
+        category=SimpleNamespace(usage_type=usage_type, resource_group=resource_group),
+        service_regions=list(regions),
+    )
 
 
 class TestParseSku:
     def test_on_demand_core_and_ram(self):
         p = RegionPrices.empty()
-        PricingClient._parse_sku(_sku("N2 Instance Core running in Iowa", 0, 31_611_000), p, "Iowa", "Americas")
-        PricingClient._parse_sku(_sku("N2 Instance Ram running in Iowa", 0, 4_237_000), p, "Iowa", "Americas")
+        PricingClient._parse_sku(_sku("N2 Instance Core running in Americas", 0, 31_611_000), p, "us-central1")
+        PricingClient._parse_sku(_sku("N2 Instance Ram running in Americas", 0, 4_237_000,
+                                      resource_group="RAM"), p, "us-central1")
         core, ram = p.on_demand
         assert core["n2"] == pytest.approx(0.031611)
         assert ram["n2"] == pytest.approx(0.004237)
 
-    def test_spot_routed_to_spot_maps(self):
+    def test_spot_routed_by_usage_type(self):
         p = RegionPrices.empty()
-        PricingClient._parse_sku(_sku("Spot Preemptible N2 Instance Core running in Iowa", 0, 9_000_000), p, "Iowa", "Americas")
-        assert p.spot[0]["n2"] == pytest.approx(0.009)
-        assert p.on_demand[0] == {}   # not double-counted as on-demand
+        PricingClient._parse_sku(
+            _sku("Spot Preemptible N2 Instance Core running in Americas", 0, 12_390_000,
+                 usage_type="Preemptible"), p, "us-central1")
+        assert p.spot[0]["n2"] == pytest.approx(0.01239)
+        assert p.on_demand[0] == {}
 
-    def test_cud_1yr_routed_to_cud_maps(self):
+    def test_cud_1yr_routed_by_usage_type(self):
         p = RegionPrices.empty()
-        PricingClient._parse_sku(_sku("Commitment v1: N2 Cpu in Americas for 1 Year", 0, 20_000_000), p, "Iowa", "Americas")
-        PricingClient._parse_sku(_sku("Commitment v1: N2 Ram in Americas for 1 Year", 0, 3_000_000), p, "Iowa", "Americas")
-        assert p.cud_1yr[0]["n2"] == pytest.approx(0.020)
-        assert p.cud_1yr[1]["n2"] == pytest.approx(0.003)
+        PricingClient._parse_sku(
+            _sku("Commitment v1: N2 Cpu in Americas for 1 Year", 0, 19_915_000,
+                 usage_type="Commit1Yr"), p, "us-central1")
+        assert p.cud_1yr[0]["n2"] == pytest.approx(0.019915)
 
-    def test_three_year_cud_not_captured_as_one_year(self):
+    def test_three_year_commitment_ignored(self):
         p = RegionPrices.empty()
-        PricingClient._parse_sku(_sku("Commitment v1: N2 Cpu in Americas for 3 Year", 0, 15_000_000), p, "Iowa", "Americas")
+        PricingClient._parse_sku(
+            _sku("Commitment v1: N2 Cpu in Americas for 3 Year", 0, 15_000_000,
+                 usage_type="Commit3Yr"), p, "us-central1")
         assert p.cud_1yr[0] == {}
 
-    def test_region_mismatch_skipped(self):
+    def test_region_not_in_service_regions_skipped(self):
         p = RegionPrices.empty()
-        PricingClient._parse_sku(_sku("N2 Instance Core running in Belgium", 0, 31_611_000), p, "Iowa", "Americas")
+        PricingClient._parse_sku(
+            _sku("N2 Instance Core running in Netherlands", 0, 34_802_000,
+                 regions=("europe-west4",)), p, "us-central1")
         assert p.on_demand[0] == {}
+
+    def test_sole_tenancy_excluded(self):
+        p = RegionPrices.empty()
+        PricingClient._parse_sku(
+            _sku("N2 Sole Tenancy Instance Core running in Americas", 0, 31_611_000), p, "us-central1")
+        assert p.on_demand[0] == {}
+
+    def test_category_named_family_resolved(self):
+        p = RegionPrices.empty()
+        PricingClient._parse_sku(_sku("Compute optimized Core running in Americas", 0, 33_982_000), p, "us-central1")
+        assert p.on_demand[0]["c2"] == pytest.approx(0.033982)
 
     def test_zero_price_sku_ignored(self):
         p = RegionPrices.empty()
-        PricingClient._parse_sku(_sku("N2 Instance Core running in Iowa", 0, 0), p, "Iowa", "Americas")
+        PricingClient._parse_sku(_sku("N2 Instance Core running in Americas", 0, 0), p, "us-central1")
         assert p.on_demand[0] == {} and p.on_demand[1] == {}
 
 
-class TestCudGroup:
-    def test_americas_europe_asia(self):
-        assert _cud_group("us-central1") == "Americas"
-        assert _cud_group("europe-west4") == "Europe"
-        assert _cud_group("asia-southeast1") == "Asia Pacific"
-        assert _cud_group("australia-southeast1") == "Asia Pacific"
+class TestFamilyFor:
+    def test_token_wins_over_alias(self):
+        assert _family_for("m3 memory-optimized instance core running in americas") == "m3"
 
-    def test_unmapped_region_returns_empty(self):
-        assert _cud_group("mars-west1") == ""
+    def test_alias_when_no_token(self):
+        assert _family_for("compute optimized core running in americas") == "c2"
+        assert _family_for("memory-optimized instance core running in americas") == "m1"
+
+    def test_none_when_unresolvable(self):
+        assert _family_for("network egress to somewhere") is None

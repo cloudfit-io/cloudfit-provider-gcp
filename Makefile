@@ -10,8 +10,12 @@ CHANGELOG := CHANGELOG.md
 
 CURRENT_VERSION := $(shell sed -n -E 's/^version = "([0-9]+\.[0-9]+\.[0-9]+)".*/\1/p' $(PYPROJECT) | head -1)
 
+# Bundled snapshots to refresh (override for a different layout):
+#   make refresh-snapshot SNAPSHOTS="path/to/one.json path/to/two.json"
+SNAPSHOTS ?= ../cloudfit-api/data/gcp_snapshot.json ../cloudfit-ui/data/gcp_snapshot.json
+
 .DEFAULT_GOAL := help
-.PHONY: help version major minor patch tag test lint build clean
+.PHONY: help version major minor patch tag test lint build clean refresh-snapshot
 
 help:
 	@echo "cloudfit-provider-gcp — current version: $(CURRENT_VERSION)"
@@ -22,12 +26,15 @@ help:
 	@echo "  make major    major bump (X.0.0)"
 	@echo ""
 	@echo "Other targets:"
-	@echo "  make version  print the current version"
-	@echo "  make tag      create git tag v$(CURRENT_VERSION)"
-	@echo "  make test     run pytest"
-	@echo "  make lint     run ruff"
-	@echo "  make build    build sdist + wheel"
-	@echo "  make clean    remove build artifacts"
+	@echo "  make version           print the current version"
+	@echo "  make tag               create git tag v$(CURRENT_VERSION)"
+	@echo "  make test              run pytest"
+	@echo "  make lint              run ruff"
+	@echo "  make build             build sdist + wheel"
+	@echo "  make clean             remove build artifacts"
+	@echo "  make refresh-snapshot  refresh prices in the bundled snapshots (needs ADC)"
+	@echo "                         schedule it, e.g. weekly cron:"
+	@echo "                         0 6 * * 1 cd $(CURDIR) && make refresh-snapshot"
 
 version:
 	@echo $(CURRENT_VERSION)
@@ -66,6 +73,14 @@ tag:
 	if git rev-parse "v$$v" >/dev/null 2>&1; then echo "tag v$$v already exists"; exit 1; fi; \
 	git tag -a "v$$v" -m "Release v$$v"; \
 	echo "created annotated tag v$$v  (push with: git push --follow-tags)"
+
+# Refresh on-demand/spot/CUD prices in the bundled snapshots from the live
+# Billing catalog (in place, curation preserved). Needs Application Default
+# Credentials (gcloud auth application-default login). Run on a schedule;
+# pricing must never be fetched on the request path.
+refresh-snapshot:
+	@python examples/refresh_prices.py $(SNAPSHOTS)
+	@echo "Review the diff, then commit the refreshed snapshot(s) in their repos."
 
 test:
 	@pytest
