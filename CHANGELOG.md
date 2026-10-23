@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_No unreleased changes._
+
+## [0.3.1] - 2026-10-22
+
 ### Fixed
 - Release CI: pinned `ruff>=0.15,<0.16` in the dev extras. ruff 0.17 enabled new default rules that failed the lint step, so the `v0.3.0` tag was never published to PyPI; 0.3.1 is the first published release with the 0.3.0 changes.
 
