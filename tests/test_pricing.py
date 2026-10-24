@@ -116,3 +116,21 @@ class TestFamilyFor:
 
     def test_none_when_unresolvable(self):
         assert _family_for("network egress to somewhere") is None
+
+
+class TestMissingBillingLibrary:
+    def test_get_price_map_raises_clear_import_error(self, monkeypatch):
+        """A missing google-cloud-billing must not silently become $0 prices."""
+        monkeypatch.setitem(__import__("sys").modules, "google.cloud.billing_v1", None)
+        with pytest.raises(ImportError, match="google-cloud-billing is required"):
+            PricingClient().get_price_map("us-central1")
+
+    def test_transient_api_failure_still_degrades_to_empty_prices(self, monkeypatch):
+        client = PricingClient()
+
+        def boom(region):
+            raise RuntimeError("503 from the Billing API")
+
+        monkeypatch.setattr(client, "_fetch_price_map", boom)
+        prices = client.get_price_map("us-central1")
+        assert prices.on_demand == RegionPrices.empty().on_demand

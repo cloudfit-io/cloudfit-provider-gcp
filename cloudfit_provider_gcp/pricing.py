@@ -138,16 +138,23 @@ class PricingClient:
             region: GCP region (e.g. "us-central1")
 
         Returns:
-            A RegionPrices. All maps are empty if the Billing API is unavailable,
+            A RegionPrices. All maps are empty if the Billing API call fails,
             so instances then fall back to ``price_hr=0.0``; spot/CUD maps are
             empty when those SKUs are absent, so those modes fall back to
             on-demand at scoring time.
+
+        Raises:
+            ImportError: if google-cloud-billing is not installed. That is a
+                broken installation, not a transient failure, so it is not
+                downgraded to zero prices.
         """
         if region in self._cache:
             return self._cache[region]
 
         try:
             prices = self._fetch_price_map(region)
+        except ImportError:
+            raise
         except Exception as exc:
             logger.warning(
                 "Failed to fetch pricing for region %s: %s. "

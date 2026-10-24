@@ -64,6 +64,8 @@ class GCPProvider(Provider):
         if self._pricing_client:
             try:
                 prices = self._pricing_client.get_price_map(region)
+            except ImportError:
+                raise  # missing google-cloud-billing: fail loudly, not with $0 prices
             except Exception as exc:
                 logger.warning("Pricing fetch failed for %s: %s", region, exc)
 
@@ -142,6 +144,8 @@ class GCPProvider(Provider):
             vcpu   = raw.get("guestCpus", 0)
             ram_gb = raw.get("memoryMb", 0) / 1024
             return reconstruct_price(instance_id, vcpu, ram_gb, *prices.on_demand)
+        except ImportError:
+            raise
         except Exception as exc:
             logger.warning("Pricing lookup failed for %s/%s: %s", instance_id, region, exc)
             return 0.0

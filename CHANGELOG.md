@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_No unreleased changes._
+### Fixed
+- A missing `google-cloud-billing` now raises a clear `ImportError` from `fetch_instances` and `get_pricing` instead of being logged and turning every price into `0.0`. A broken installation is not a transient failure; temporary Billing API errors still fall back to zero prices as before.
 
 ## [0.3.4] - 2026-10-23
 
