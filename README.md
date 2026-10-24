@@ -16,7 +16,7 @@ Fetches machine types, availability, and on-demand, spot, and 1-year committed-u
 pip install cloudfit-provider-gcp
 ```
 
-Requires Python 3.10+ and `cloudfit-core>=0.8.0`.
+Requires Python 3.10 or newer (CI tests 3.10 through 3.14) and `cloudfit-core>=0.8.2`.
 
 ---
 
@@ -167,11 +167,18 @@ When GCP marks a machine type as deprecated, the provider sets `status="deprecat
 ```
 cloudfit-provider-gcp/
 ├── README.md
+├── CHANGELOG.md             # release notes; GitHub Releases are built from it
 ├── CONTRIBUTING.md
 ├── CITATION.cff
 ├── pyproject.toml
+├── Makefile                 # version bump, tag, test, lint, build
 ├── LICENSE
 ├── .gitignore
+├── .github/
+│   ├── dependabot.yml       # monthly GitHub Actions updates
+│   └── workflows/
+│       ├── ci.yml           # lint, mypy --strict, tests; PyPI publish and release on tags
+│       └── refresh-snapshot.yml   # weekly price refresh PRs to cloudfit-api and cloudfit-ui
 │
 ├── cloudfit_provider_gcp/
 │   ├── __init__.py          # exports GCPProvider

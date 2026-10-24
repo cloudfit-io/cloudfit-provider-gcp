@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [0.3.3] - 2026-10-23
+
+### Changed
+- Require `cloudfit-core>=0.8.2`, the release that makes `scheduling.spot` imply spot pricing and fixes YAML loading of `pricing_mode` and `region`.
+- README states the tested Python range (3.10 through 3.14) and lists the CHANGELOG, Makefile, and CI, refresh, and Dependabot config in the repository layout.
+
 ## [0.3.2] - 2026-10-23
 
 ### Added
