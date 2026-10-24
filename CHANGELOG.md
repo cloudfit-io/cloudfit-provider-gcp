@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_No unreleased changes._
+### Added
+- `py.typed` marker, so type checkers use the package's type hints (PEP 561), as cloudfit-core and cloudfit-provider-aws already do.
+
+### Changed
+- CI enforces at least 60% test coverage and runs `pip-audit` on the dependency tree; Dependabot also proposes monthly Python dependency updates.
 
 ## [0.3.5] - 2026-10-24
 

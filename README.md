@@ -186,7 +186,8 @@ cloudfit-provider-gcp/
 │   ├── normalizer.py        # raw GCP API response → MachineType
 │   ├── pricing.py           # Cloud Billing Catalog API → on-demand, spot, CUD prices
 │   ├── regions.py           # GCP region list + helpers
-│   └── registry.py          # write normalized instances to PostgreSQL
+│   ├── registry.py          # write normalized instances to PostgreSQL
+│   └── py.typed             # ships type hints (PEP 561)
 │
 ├── examples/
 │   ├── recommend.py           # live fetch → rank (needs GCP credentials)
