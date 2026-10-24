@@ -131,7 +131,7 @@ price_hr = provider.get_pricing("n2-standard-32", region="us-central1")  # on-de
 
 ### Bundled snapshots (weekly, automated)
 
-`cloudfit-api` and `cloudfit-ui` ship a curated 875-instance snapshot. The [`refresh-snapshot`](.github/workflows/refresh-snapshot.yml) workflow in this repo runs every Monday at 06:00 UTC: it refreshes on-demand, spot, and committed-use prices in both snapshots in place with [`examples/refresh_prices.py`](examples/refresh_prices.py) (row set, regions, and statuses are preserved; GPU prices are left as is) and opens a pull request in each repo. The run fails instead of opening a PR if any region's prices can't be fetched. It authenticates to GCP with Workload Identity Federation (no stored keys) and needs the `SNAPSHOT_TOKEN`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, and `GCP_SERVICE_ACCOUNT` secrets; see the comments in the workflow file.
+`cloudfit-api` and `cloudfit-ui` ship a curated 875-instance GCP snapshot (alongside the AWS one from cloudfit-provider-aws). The [`refresh-snapshot`](.github/workflows/refresh-snapshot.yml) workflow in this repo runs every Monday at 06:00 UTC: it refreshes on-demand, spot, and committed-use prices in both snapshots in place with [`examples/refresh_prices.py`](examples/refresh_prices.py) (row set, regions, and statuses are preserved; GPU prices are left as is) and opens a pull request in each repo. The run fails instead of opening a PR if any region's prices can't be fetched. It authenticates to GCP with Workload Identity Federation (no stored keys) and needs the `SNAPSHOT_TOKEN`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, and `GCP_SERVICE_ACCOUNT` secrets; see the comments in the workflow file.
 
 To refresh locally (needs `gcloud auth application-default login`):
 
@@ -208,7 +208,7 @@ cloudfit-provider-gcp/
 ## Related projects
 
 - [`cloudfit-core`](https://github.com/cloudfit-io/cloudfit-core): scoring engine
-- [`cloudfit-provider-aws`](https://github.com/cloudfit-io/cloudfit-provider-aws): AWS provider (planning phase)
+- [`cloudfit-provider-aws`](https://github.com/cloudfit-io/cloudfit-provider-aws): AWS EC2 provider (public price list, no credentials)
 - [`cloudfit-api`](https://github.com/cloudfit-io/cloudfit-api): REST API over the scoring engine ([live demo](https://chaitanyakasaraneni-cloudfit-api.hf.space/docs))
 - [`cloudfit-ui`](https://github.com/cloudfit-io/cloudfit-ui): Gradio UI over the scoring engine ([live demo](https://chaitanyakasaraneni-cloudfit-ui.hf.space))
 - [`samplesheet-parser`](https://github.com/chaitanyakasaraneni/samplesheet-parser): Illumina SampleSheet parser
