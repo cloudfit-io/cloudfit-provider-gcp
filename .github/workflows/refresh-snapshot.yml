@@ -31,11 +31,40 @@ concurrency:
 permissions:
   contents: read
   id-token: write          # for Workload Identity Federation
+  issues: write            # token-expiry reminder issue
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
     steps:
+      # Warn ahead of SNAPSHOT_TOKEN expiry: GitHub reports a fine-grained token's
+      # expiry in a response header. Under 30 days left, open an issue here (once).
+      - name: Check SNAPSHOT_TOKEN expiry
+        env:
+          SNAPSHOT_TOKEN: ${{ secrets.SNAPSHOT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          exp=$(curl -sI -H "Authorization: Bearer $SNAPSHOT_TOKEN" \
+            https://api.github.com/repos/cloudfit-io/cloudfit-api \
+            | tr -d '\r' | awk -F': ' 'tolower($1) == "github-authentication-token-expiration" {print $2}')
+          if [ -z "$exp" ]; then
+            echo "SNAPSHOT_TOKEN reports no expiry."
+            exit 0
+          fi
+          days=$(( ( $(date -d "$exp" +%s) - $(date +%s) ) / 86400 ))
+          echo "SNAPSHOT_TOKEN expires $exp ($days days)."
+          if [ "$days" -lt 30 ]; then
+            echo "::warning::SNAPSHOT_TOKEN expires in $days days ($exp)."
+            open=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "SNAPSHOT_TOKEN expires in:title" --json number --jq 'length')
+            if [ "$open" = "0" ]; then
+              gh issue create --repo "$GITHUB_REPOSITORY" \
+                --title "SNAPSHOT_TOKEN expires in $days days" \
+                --body "The token the weekly snapshot refresh uses to open pull requests in cloudfit-api and cloudfit-ui expires on $exp. After that, the refresh fails.
+
+          To renew: create a fine-grained token with Contents and Pull requests read/write on cloudfit-api and cloudfit-ui only, then replace the \`SNAPSHOT_TOKEN\` secret in both cloudfit-provider-gcp and cloudfit-provider-aws. Close this issue once done."
+            fi
+          fi
+
       - name: Check out cloudfit-provider-gcp
         uses: actions/checkout@v7
 
